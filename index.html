@@ -40,7 +40,7 @@
             text-align: center;
             margin-top: -60px;
         }
-        .sidebar a {
+        .sidebar a, .dropdown-btn {
             padding: 15px 30px;
             text-decoration: none;
             font-size: 18px;
@@ -48,8 +48,21 @@
             display: block;
             border-bottom: 1px solid #f3f4f6;
             transition: 0.3s;
+            cursor: pointer;
+            width: 100%;
+            text-align: right;
+            border-left: none; border-right: none; background: none;
+            font-family: 'Cairo';
         }
-        .sidebar a:hover { background-color: #FFFBEB; color: #D97706; padding-right: 40px; }
+        .sidebar a:hover, .dropdown-btn:hover { background-color: #FFFBEB; color: #D97706; padding-right: 40px; }
+        
+        .dropdown-container {
+            display: none;
+            background-color: #f9fafb;
+            padding-right: 20px;
+        }
+        .dropdown-container a { font-size: 16px; border-bottom: 0.5px solid #eee; }
+
         .sidebar .closebtn { position: absolute; top: 15px; left: 25px; font-size: 36px; cursor: pointer; color: #1F2937; }
 
         .admin-gate {
@@ -146,6 +159,7 @@
 
         /* --- Product Grid --- */
         .container { padding: 40px 20px; max-width: 1300px; margin: 0 auto; }
+        .category-title { color: #D97706; margin-bottom: 25px; border-right: 5px solid #D97706; padding-right: 15px; font-size: 24px; }
         .product-grid { 
             display: grid; 
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
@@ -161,6 +175,40 @@
         }
         .product:hover { transform: translateY(-10px); box-shadow: 0 20px 40px rgba(217,119,6,0.1); border-color: #D97706; }
         .product img { width: 100%; height: 200px; object-fit: contain; margin-bottom: 15px; }
+        
+        .product .product-price-grid { 
+            color: #D97706; 
+            font-weight: 800; 
+            font-size: 22px; 
+            margin-bottom: 15px; 
+        }
+
+        /* --- زر عرض التفاصيل الجديد --- */
+        .details-btn {
+            background: #1F2937;
+            color: #fff;
+            border: none;
+            padding: 12px;
+            border-radius: 50px;
+            width: 100%;
+            cursor: pointer;
+            font-family: 'Cairo';
+            font-weight: 600;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .details-btn:hover {
+            background: #D97706;
+            transform: scale(1.03);
+            box-shadow: 0 6px 15px rgba(217,119,6,0.3);
+        }
+
+        .details-btn:active {
+            transform: scale(0.98);
+        }
 
         /* --- Modal Popup --- */
         .modal {
@@ -188,12 +236,21 @@
         #modalImg { width: 100%; max-height: 450px; object-fit: contain; border-radius: 15px; }
         .modal-info { flex: 0.9; padding: 40px; text-align: right; display: flex; flex-direction: column; }
         .modal-info h2 { font-size: 28px; margin-top: 0; }
-        .modal-price { font-size: 24px; color: #D97706; font-weight: bold; margin-bottom: 15px; }
+        
+        .modal-price { 
+            font-size: 32px; 
+            color: #D97706; 
+            font-weight: 800; 
+            margin-bottom: 15px; 
+        }
+        
         .modal-description { line-height: 1.8; color: #444; margin-bottom: 25px; }
         .wa-btn {
             background: #25D366; color: white; padding: 15px; border-radius: 50px; 
             text-decoration: none; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px;
+            transition: 0.3s;
         }
+        .wa-btn:hover { background: #1eb956; transform: translateY(-2px); }
 
         .img-nav { position: absolute; top: 50%; transform: translateY(-50%); background: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); color: #D97706; }
 
@@ -208,8 +265,17 @@
 <div id="sideMenu" class="sidebar">
     <div class="sidebar-header"><h3>إكتشف مجموعتنا</h3></div>
     <span class="closebtn" onclick="toggleNav(0)">&times;</span>
-    <a href="#"><i class="fa-solid fa-house"></i> الرئيسية</a>
-    <a href="#"><i class="fa-solid fa-utensils"></i> جميع الأواني</a>
+    <a onclick="filterProducts('all')"><i class="fa-solid fa-house"></i> الرئيسية</a>
+    
+    <button class="dropdown-btn" onclick="toggleDropdown()">
+        <i class="fa-solid fa-list"></i> تصنيفات المنتجات 
+        <i class="fa fa-caret-down" style="margin-right: 10px;"></i>
+    </button>
+    <div id="catDropdown" class="dropdown-container">
+        <a onclick="filterProducts('normal')"><i class="fa-solid fa-utensils"></i> أواني المطبخ </a>
+        <a onclick="filterProducts('electrical')"><i class="fa-solid fa-bolt"></i> تجهيزات كهربائية </a>
+    </div>
+
     <a href="#"><i class="fa-solid fa-tags"></i> العروض الحالية</a>
     <a href="#"><i class="fa-solid fa-info-circle"></i> عن المتجر</a>
     
@@ -243,6 +309,7 @@
 </header>
 
 <div class="container">
+    <h2 id="sectionTitle" class="category-title">جميع المنتجات</h2>
     <div id="storeGrid" class="product-grid">جاري تحميل أواني الخير...</div>
 </div>
 
@@ -286,32 +353,55 @@
     const db = getDatabase(app);
 
     let storeData = [];
+    let currentFilter = 'all';
     let pIdx = 0, iIdx = 0;
 
-    // جلب المنتجات من السحابة بدلاً من ذاكرة المتصفح
     onValue(ref(db, 'products'), (snapshot) => {
         const data = snapshot.val();
         storeData = data ? Object.values(data) : [];
         renderItems();
     });
 
+    window.filterProducts = (category) => {
+        currentFilter = category;
+        const titles = { 'all': 'جميع المنتجات', 'normal': 'أواني المطبخ ', 'electrical': 'تجهيزات كهربائية' };
+        document.getElementById('sectionTitle').innerText = titles[category];
+        renderItems();
+        toggleNav(0); 
+    };
+
     function renderItems() {
         const grid = document.getElementById('storeGrid');
-        if(storeData.length === 0) {
-            grid.innerHTML = "<p style='text-align:center; width:100%;'>لا توجد منتجات منشورة حالياً.</p>";
+        
+        const filteredData = currentFilter === 'all' 
+            ? storeData 
+            : storeData.filter(p => p.category === currentFilter);
+
+        if(filteredData.length === 0) {
+            grid.innerHTML = "<p style='text-align:center; width:100%; padding: 50px;'>لا توجد منتجات في هذا القسم حالياً.</p>";
             return;
         }
-        grid.innerHTML = storeData.map((p, i) => `
+
+        grid.innerHTML = filteredData.map((p, i) => `
             <div class="product">
                 <img src="${(p.images && p.images.length > 0) ? p.images[0] : ''}">
                 <h2>${p.title}</h2>
-                <div class="price">${p.price}</div>
-                <button onclick="openPModal(${i})" style="background:#1F2937; color:#fff; border:none; padding:12px; border-radius:50px; width:100%; cursor:pointer;">عرض التفاصيل</button>
+                <div class="product-price-grid">${p.price}</div>
+                <button class="details-btn" onclick="openFilteredModal('${p.title}')">عرض التفاصيل</button>
             </div>
         `).join('');
     }
 
-    // ربط الوظائف بالنافذة العامة لتتمكن الأزرار من رؤيتها
+    window.openFilteredModal = (title) => {
+        const index = storeData.findIndex(p => p.title === title);
+        if(index !== -1) window.openPModal(index);
+    }
+
+    window.toggleDropdown = () => {
+        const dropdown = document.getElementById("catDropdown");
+        dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
+    };
+
     window.toggleNav = (state) => {
         document.getElementById("sideMenu").style.width = state ? "300px" : "0";
         document.getElementById("overlay").style.display = state ? "block" : "none";
