@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>لوحة التحكم | متجر الخير</title>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .admin-container { max-width: 750px; margin: 40px auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 20px; }
+        input[type="text"] { width: 100%; padding: 12px; border: 2px solid #eee; border-radius: 12px; outline: none; transition: 0.3s; }
+        input[type="text"]:focus { border-color: #D97706; }
+        
+        /* مظهر أزرار الإدارة */
+        .admin-btn { 
+            background: linear-gradient(135deg, #D97706 0%, #B45309 100%); 
+            color: white; border: none; padding: 16px; width: 100%; 
+            border-radius: 50px; font-weight: 700; cursor: pointer; 
+            box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3); transition: 0.3s;
+        }
+        .admin-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(217, 119, 6, 0.4); }
+
+        /* منطقة المعاينة */
+        #imgPreviewContainer { display: flex; gap: 12px; flex-wrap: wrap; margin: 15px 0; }
+        .preview-item { position: relative; width: 90px; height: 90px; }
+        .preview-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; border: 2px solid #D97706; }
+        .remove-img-btn { position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+
+        .admin-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; border-bottom: 1px solid #eee; }
+        .admin-item img { width: 55px; height: 55px; border-radius: 8px; object-fit: cover; }
+        .actions-btns { display: flex; gap: 8px; }
+        .edit-action { background: #f3f4f6; color: #1f2937; border: none; padding: 8px 15px; border-radius: 50px; cursor: pointer; }
+        .del-action { background: #fee2e2; color: #dc2626; border: none; padding: 8px 15px; border-radius: 50px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <h2 id="formTitle" style="color:#1f2937; margin-bottom:20px;">إضافة منتج جديد</h2>
+        <input type="hidden" id="editIndex" value="-1">
+        
+        <div class="form-group"><label>اسم المنتج</label><input type="text" id="pName" placeholder="مثلاً: طقم فناجين"></div>
+        <div class="form-group"><label>السعر</label><input type="text" id="pPrice" placeholder="180 MAD"></div>
+        
+        <div class="form-group">
+            <label>صور المنتج (يمكنك اختيار عدة صور)</label>
+            <input type="file" id="pImgFile" multiple accept="image/*" onchange="handleMultipleFiles(this)">
+            <div id="imgPreviewContainer"></div>
+        </div>
+
+        <div class="form-group"><label>وصف المنتج</label><div id="editor"></div></div>
+
+        <button class="admin-btn" onclick="handleSave()">حفظ البيانات</button>
+        <button id="cancelBtn" style="display:none; background:#6b7280; margin-top:10px;" class="admin-btn" onclick="resetForm()">إلغاء التعديل</button>
+
+        <div id="adminList" style="margin-top:30px;"></div>
+        <a href="index.html" style="display:block; text-align:center; margin-top:25px; color:#D97706; text-decoration:none; font-weight:bold;">العودة للمتجر</a>
+    </div>
+
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script>
+        var quill = new Quill('#editor', { theme: 'snow' });
+        let currentImagesArray = [];
+
+        function handleMultipleFiles(input) {
+            const files = Array.from(input.files);
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    currentImagesArray.push(reader.result);
+                    renderImagesPreview();
+                };
+                reader.readAsDataURL(file);
+            });
+            input.value = ""; 
+        }
+
+        function renderImagesPreview() {
+            const container = document.getElementById('imgPreviewContainer');
+            container.innerHTML = "";
+            currentImagesArray.forEach((src, idx) => {
+                container.innerHTML += `
+                    <div class="preview-item">
+                        <img src="${src}">
+                        <button class="remove-img-btn" onclick="removeSpecificImg(${idx})">×</button>
+                    </div>`;
+            });
+        }
+
+        function removeSpecificImg(idx) {
+            currentImagesArray.splice(idx, 1);
+            renderImagesPreview();
+        }
+
+        function handleSave() {
+            const name = document.getElementById('pName').value;
+            const price = document.getElementById('pPrice').value;
+            const idx = document.getElementById('editIndex').value;
+            if(!name || !price || currentImagesArray.length === 0) return alert("يرجى ملء كافة الخانات واختيار صورة");
+
+            let products = JSON.parse(localStorage.getItem('myProducts')) || [];
+            const data = { title: name, price: price, images: currentImagesArray, desc: quill.root.innerHTML };
+
+            if(idx === "-1") products.push(data);
+            else products[idx] = data;
+
+            localStorage.setItem('myProducts', JSON.stringify(products));
+            resetForm();
+            renderList();
+        }
+
+        function startEdit(i) {
+            const products = JSON.parse(localStorage.getItem('myProducts')) || [];
+            const p = products[i];
+            document.getElementById('pName').value = p.title;
+            document.getElementById('pPrice').value = p.price;
+            currentImagesArray = p.images ? [...p.images] : (p.image ? [p.image] : []);
+            renderImagesPreview();
+            quill.root.innerHTML = p.desc;
+            document.getElementById('editIndex').value = i;
+            document.getElementById('formTitle').innerText = "تعديل منتج: " + p.title;
+            document.getElementById('cancelBtn').style.display = "block";
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function renderList() {
+            const products = JSON.parse(localStorage.getItem('myProducts')) || [];
+            const container = document.getElementById('adminList');
+            container.innerHTML = "<h3>المنتجات المضافة:</h3>";
+            products.forEach((p, i) => {
+                const firstImg = (p.images && p.images[0]) ? p.images[0] : (p.image || '');
+                container.innerHTML += `
+                    <div class="admin-item">
+                        <img src="${firstImg}">
+                        <span style="flex-grow:1; margin-right:15px; font-weight:600;">${p.title}</span>
+                        <div class="actions-btns">
+                            <button class="edit-action" onclick="startEdit(${i})">تعديل</button>
+                            <button class="del-action" onclick="deleteProduct(${i})">حذف</button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function resetForm() {
+            document.getElementById('pName').value = "";
+            document.getElementById('pPrice').value = "";
+            currentImagesArray = [];
+            renderImagesPreview();
+            quill.root.innerHTML = "";
+            document.getElementById('editIndex').value = "-1";
+            document.getElementById('formTitle').innerText = "إضافة منتج جديد";
+            document.getElementById('cancelBtn').style.display = "none";
+        }
+
+        function deleteProduct(i) {
+            if(confirm("هل أنت متأكد من حذف هذا المنتج؟")) {
+                let p = JSON.parse(localStorage.getItem('myProducts'));
+                p.splice(i, 1);
+                localStorage.setItem('myProducts', JSON.stringify(p));
+                renderList();
+            }
+        }
+        renderList();
+    </script>
+</body>
+</html>
